@@ -19,7 +19,7 @@ A Node.js automation tool that uses Puppeteer to download files from Stocip.com.
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/stocip-downloader.git
+git clone https://github.com/alihatem361/stocip-downloader.git
 cd stocip-downloader
 ```
 
