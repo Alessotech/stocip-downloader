@@ -1,0 +1,39 @@
+{
+  "info": {
+    "name": "Stocip Downloader API",
+    "description": "Collection for testing Stocip Downloader API endpoints",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Get Download URL",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:3000/api/download",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "3000",
+          "path": ["api", "download"]
+        },
+        "description": "Get the download URL from Stocip"
+      }
+    },
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:3000/health",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "3000",
+          "path": ["health"]
+        },
+        "description": "Check if the API is running"
+      }
+    }
+  ]
+}
