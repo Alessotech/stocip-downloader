@@ -1,7 +1,24 @@
 const puppeteer = require("puppeteer");
 const fs = require("fs");
 const path = require("path");
+const express = require("express");
+const cors = require("cors");
+const rateLimit = require("express-rate-limit");
 require("dotenv").config();
+
+const app = express();
+const port = process.env.PORT || 3000;
+
+// Rate limiting configuration
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // limit each IP to 5 requests per windowMs
+});
+
+// Middleware
+app.use(cors());
+app.use(express.json());
+app.use(limiter);
 
 async function downloadFile() {
   let browser;
@@ -103,14 +120,43 @@ async function downloadFile() {
     await browser.close();
 
     console.log("✅ Done! Check the downloads folder for your URL.");
+    return downloadUrl;
   } catch (error) {
     console.error("❌ Error occurred:", error.message);
     if (browser) {
       await browser.close();
     }
-    process.exit(1);
+    throw error;
   }
 }
 
-// Execute the download function
-downloadFile().catch(console.error);
+// API Endpoints
+app.get("/api/download", async (req, res) => {
+  try {
+    const downloadUrl = await downloadFile();
+    res.json({
+      success: true,
+      message: "Download URL retrieved successfully",
+      data: {
+        downloadUrl,
+        timestamp: new Date().toISOString(),
+      },
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to retrieve download URL",
+      error: error.message,
+    });
+  }
+});
+
+// Health check endpoint
+app.get("/health", (req, res) => {
+  res.json({ status: "ok" });
+});
+
+// Start server
+app.listen(port, () => {
+  console.log(`🚀 Server is running on port ${port}`);
+});
