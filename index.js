@@ -4,6 +4,7 @@ const path = require("path");
 const express = require("express");
 const cors = require("cors");
 const rateLimit = require("express-rate-limit");
+const fetch = require("node-fetch");
 require("dotenv").config();
 
 const app = express();
@@ -20,17 +21,31 @@ app.use(cors());
 app.use(express.json());
 app.use(limiter);
 
-async function downloadFile() {
+async function downloadFile(url) {
   let browser;
   try {
+    // Set up download path
+    const downloadsDir = path.join(__dirname, "downloads");
+    if (!fs.existsSync(downloadsDir)) {
+      fs.mkdirSync(downloadsDir);
+    }
+
     console.log("🚀 Launching browser in private mode...");
     browser = await puppeteer.launch({
       headless: false,
       args: ["--incognito", "--disable-extensions"],
+      defaultViewport: { width: 1280, height: 800 },
     });
 
     const pages = await browser.pages();
     const page = pages[0] || (await browser.newPage());
+
+    // Add this right after getting the page
+    const client = await page.target().createCDPSession();
+    await client.send("Page.setDownloadBehavior", {
+      behavior: "allow",
+      downloadPath: path.join(__dirname, "downloads"),
+    });
 
     // Set viewport to a reasonable size
     await page.setViewport({ width: 1280, height: 800 });
@@ -81,46 +96,96 @@ async function downloadFile() {
       page.click('button[type="submit"]'),
     ]);
 
-    // Now navigate to download page
+    // Now navigate to download page with the provided URL
     console.log("📄 Navigating to download page...");
     await page.goto("https://stocip.com/product/envato-file-download/", {
       waitUntil: "networkidle2",
-      timeout: 60000,
+      timeout: 120000,
     });
 
-    console.log("🔍 Looking for download link...");
-    await page.waitForSelector(".download-input", { timeout: 60000 });
+    console.log("🔍 Looking for download input...");
+    await page.waitForSelector(".download-input", { timeout: 120000 });
 
-    const downloadUrl = await page.evaluate(() => {
-      const inputElement = document.querySelector(".download-input");
-      return inputElement ? inputElement.getAttribute("placeholder") : null;
-    });
+    // Fill in the URL
+    await page.type(".download-input", url);
 
-    if (!downloadUrl) {
-      throw new Error("❌ Could not find download URL on the page");
+    // Wait for and click the download button
+    console.log("📥 Starting download...");
+    await page.waitForSelector('button[type="submit"]');
+
+    // Click the download button and wait for the download to start
+    await page.click('button[type="submit"]');
+
+    // Wait for the download link to appear
+    console.log("⏳ Waiting for download link...");
+    await page.waitForSelector("[data-download]", { timeout: 180000 });
+
+    // Get the download link
+    const downloadLink = await page.$eval("[data-download]", (el) => el.href);
+
+    // Download the file using fetch with a longer timeout
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 300000); // 5 minutes timeout
+
+    try {
+      const response = await fetch(downloadLink, {
+        signal: controller.signal,
+        timeout: 300000,
+      });
+
+      clearTimeout(timeout);
+
+      // Check if response is OK
+      if (!response.ok) {
+        throw new Error(`Download failed with status: ${response.status}`);
+      }
+
+      const buffer = await response.buffer();
+
+      // Get file size before saving
+      const fileSize = buffer.length;
+
+      // Create a unique filename
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+      const fileExtension = downloadLink.split(".").pop();
+      const fileName = path.join(
+        downloadsDir,
+        `download_${timestamp}.${fileExtension}`
+      );
+
+      // Save the file
+      fs.writeFileSync(fileName, buffer);
+
+      // Verify file exists and size matches
+      const savedFile = fs.statSync(fileName);
+      if (!fs.existsSync(fileName)) {
+        throw new Error("File was not saved successfully");
+      }
+
+      if (savedFile.size !== fileSize) {
+        throw new Error(
+          `File size mismatch. Expected: ${fileSize}, Got: ${savedFile.size}`
+        );
+      }
+
+      console.log(`💾 File downloaded successfully to: ${fileName}`);
+      console.log(
+        `📦 File size: ${(savedFile.size / 1024 / 1024).toFixed(2)} MB`
+      );
+
+      // Close the browser after saving
+      console.log("🔒 Closing browser...");
+      await browser.close();
+
+      console.log("✅ Done! Check the downloads folder for your file.");
+      return true;
+    } catch (error) {
+      console.error("❌ Error occurred:", error.message);
+      if (browser) {
+        await browser.close();
+      }
+      throw error;
     }
-
-    console.log("📥 Found download URL:", downloadUrl);
-
-    // Create downloads directory if it doesn't exist
-    const downloadsDir = path.join(__dirname, "downloads");
-    if (!fs.existsSync(downloadsDir)) {
-      fs.mkdirSync(downloadsDir);
-    }
-
-    // Save URL to file in downloads directory
-    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const fileName = path.join(downloadsDir, `download_url_${timestamp}.txt`);
-
-    fs.writeFileSync(fileName, downloadUrl);
-    console.log(`💾 Saved download URL to ${fileName}`);
-
-    // Close the browser after saving
-    console.log("🔒 Closing browser...");
-    await browser.close();
-
-    console.log("✅ Done! Check the downloads folder for your URL.");
-    return downloadUrl;
   } catch (error) {
     console.error("❌ Error occurred:", error.message);
     if (browser) {
@@ -131,21 +196,30 @@ async function downloadFile() {
 }
 
 // API Endpoints
-app.get("/api/download", async (req, res) => {
+app.post("/api/download", async (req, res) => {
   try {
-    const downloadUrl = await downloadFile();
+    const { url } = req.body;
+
+    if (!url) {
+      return res.status(400).json({
+        success: false,
+        message: "URL is required in the request body",
+      });
+    }
+
+    await downloadFile(url);
     res.json({
       success: true,
-      message: "Download URL retrieved successfully",
+      message: "Download completed successfully",
       data: {
-        downloadUrl,
+        url,
         timestamp: new Date().toISOString(),
       },
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: "Failed to retrieve download URL",
+      message: "Failed to download file",
       error: error.message,
     });
   }
