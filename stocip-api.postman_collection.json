@@ -6,10 +6,19 @@
   },
   "item": [
     {
-      "name": "Get Download URL",
+      "name": "Single File Download",
       "request": {
-        "method": "GET",
-        "header": [],
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"url\": \"https://example.com/your-file-url\"\n}"
+        },
         "url": {
           "raw": "http://localhost:3000/api/download",
           "protocol": "http",
@@ -17,7 +26,53 @@
           "port": "3000",
           "path": ["api", "download"]
         },
-        "description": "Get the download URL from Stocip"
+        "description": "Download a single file from Stocip"
+      }
+    },
+    {
+      "name": "Batch Download",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"urls\": [\n        \"https://example.com/file1\",\n        \"https://example.com/file2\",\n        \"https://example.com/file3\"\n    ]\n}"
+        },
+        "url": {
+          "raw": "http://localhost:3000/api/batch-download",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "3000",
+          "path": ["api", "batch-download"]
+        },
+        "description": "Download multiple files in parallel (max 10 files)"
+      }
+    },
+    {
+      "name": "Check Batch Status",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:3000/api/batch-status/{{batchId}}",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "3000",
+          "path": ["api", "batch-status", "{{batchId}}"],
+          "variable": [
+            {
+              "key": "batchId",
+              "value": "batch_123456789",
+              "description": "The batch ID received from the batch-download endpoint"
+            }
+          ]
+        },
+        "description": "Check the status of a batch download operation"
       }
     },
     {
