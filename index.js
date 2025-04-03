@@ -36,6 +36,36 @@ async function initializeBrowser() {
   return browser;
 }
 
+// Add function to save download logs
+async function saveDownloadLog(originalUrl, generatedText, filePath, fileSize) {
+  const fileSizeMB = fileSize
+    ? (fileSize / 1024 / 1024).toFixed(2) + " MB"
+    : "Unknown";
+
+  const logEntry = `
+=== Download Log Entry ===
+Date: ${new Date().toLocaleString()}
+Original URL: ${originalUrl}
+Generated Text: ${generatedText}
+Downloaded File: ${filePath}
+File Size: ${fileSizeMB}
+=====================
+`;
+
+  const logsDir = path.join(__dirname, "logs");
+  const logFile = path.join(logsDir, "download_logs.txt");
+
+  // Create logs directory if it doesn't exist
+  if (!fs.existsSync(logsDir)) {
+    fs.mkdirSync(logsDir);
+  }
+
+  // Append to log file
+  await fs.promises.appendFile(logFile, logEntry);
+
+  return { originalUrl, generatedText, filePath, fileSize };
+}
+
 async function downloadFile(url) {
   console.log("🔗 Processing URL:", url);
 
@@ -75,11 +105,24 @@ async function downloadFile(url) {
     await page.waitForSelector(".download-input");
     await page.fill(".download-input", url);
 
+    // Get the generated text from the input after filling
+    const generatedText = await page.$eval(".download-input", (el) => el.value);
+
     console.log("⏳ Initiating download process...");
     const [download] = await Promise.all([
       page.waitForEvent("download"),
       page.click('button[type="submit"]'),
     ]);
+
+    // Wait for the input to be updated with the download link
+    await page.waitForTimeout(3000);
+
+    // Now get the final placeholder text that contains the direct download URL
+    const finalPlaceholderText = await page.$eval(
+      ".download-input",
+      (el) => el.value || el.getAttribute("placeholder") || ""
+    );
+    console.log("📋 Generated placeholder text:", finalPlaceholderText);
 
     const suggestedFilename = download.suggestedFilename();
     console.log("📦 Suggested filename:", suggestedFilename);
@@ -98,14 +141,154 @@ async function downloadFile(url) {
     const stats = await fs.promises.stat(downloadsPath);
     console.log(`📊 File size: ${(stats.size / 1024 / 1024).toFixed(2)} MB`);
 
+    // Save download log with the final placeholder text
+    await saveDownloadLog(url, finalPlaceholderText, downloadsPath, stats.size);
+
     return {
       success: true,
       filePath: downloadsPath,
       fileName: suggestedFilename,
       fileSize: stats.size,
+      generatedText: finalPlaceholderText,
     };
   } catch (error) {
     console.error("❌ Download failed:", error);
+    throw error;
+  } finally {
+    await context.close();
+  }
+}
+
+// New function to download multiple files using the same session
+async function downloadMultipleFiles(urls) {
+  console.log("🔗 Starting batch download process for", urls.length, "files");
+
+  if (!browser) {
+    browser = await initializeBrowser();
+  }
+
+  const context = await browser.newContext({
+    acceptDownloads: true,
+    viewport: { width: 1280, height: 720 },
+  });
+  const page = await context.newPage();
+
+  try {
+    // Login only once
+    console.log("🔑 Navigating to login page...");
+    await page.goto("https://stocip.com/login", { waitUntil: "networkidle" });
+    await page.waitForSelector('input[type="text"], input[type="email"]');
+    await page.fill(
+      'input[type="text"], input[type="email"]',
+      process.env.STOCIP_EMAIL
+    );
+    await page.fill('input[type="password"]', process.env.STOCIP_PASSWORD);
+
+    console.log("🔓 Attempting to log in...");
+    await Promise.all([
+      page.waitForNavigation({ waitUntil: "networkidle" }),
+      page.click('button[type="submit"]'),
+    ]);
+    console.log("✅ Login successful!");
+
+    // Navigate to download page once
+    console.log("📄 Navigating to download page...");
+    await page.goto("https://stocip.com/product/envato-file-download/", {
+      waitUntil: "networkidle",
+    });
+
+    const results = [];
+
+    // Process each URL one by one
+    for (let i = 0; i < urls.length; i++) {
+      const url = urls[i];
+      console.log(`🔄 Processing file ${i + 1}/${urls.length}: ${url}`);
+
+      try {
+        // Fill the input with the current URL
+        await page.waitForSelector(".download-input");
+        await page.fill(".download-input", url);
+
+        // Get the generated text from the input after filling
+        const generatedText = await page.$eval(
+          ".download-input",
+          (el) => el.value
+        );
+
+        console.log("⏳ Initiating download process...");
+        const [download] = await Promise.all([
+          page.waitForEvent("download"),
+          page.click('button[type="submit"]'),
+        ]);
+
+        // Wait for the input to be updated with the download link
+        await page.waitForTimeout(3000);
+
+        // Get the final placeholder text that contains the direct download URL
+        const finalPlaceholderText = await page.$eval(
+          ".download-input",
+          (el) => el.value || el.getAttribute("placeholder") || ""
+        );
+        console.log("📋 Generated placeholder text:", finalPlaceholderText);
+
+        const suggestedFilename = download.suggestedFilename();
+        console.log("📦 Suggested filename:", suggestedFilename);
+
+        const filePath = await download.path();
+        const downloadsPath = path.join(
+          process.env.DOWNLOAD_PATH ||
+            path.join("C:", "Users", "AliPc", "Downloads"),
+          suggestedFilename || path.basename(filePath)
+        );
+
+        await fs.promises.copyFile(filePath, downloadsPath);
+        console.log(`✅ File downloaded successfully to: ${downloadsPath}`);
+
+        // Get file stats
+        const stats = await fs.promises.stat(downloadsPath);
+        console.log(
+          `📊 File size: ${(stats.size / 1024 / 1024).toFixed(2)} MB`
+        );
+
+        // Save download log with the final placeholder text and file size
+        await saveDownloadLog(
+          url,
+          finalPlaceholderText,
+          downloadsPath,
+          stats.size
+        );
+
+        const result = {
+          success: true,
+          filePath: downloadsPath,
+          fileName: suggestedFilename,
+          fileSize: stats.size,
+          generatedText: finalPlaceholderText,
+        };
+
+        results.push(result);
+
+        // Click the reset button for next download (if there are more files to download)
+        if (i < urls.length - 1) {
+          console.log(
+            "🔄 Clicking reset button to prepare for next download..."
+          );
+          await page.click("#resetButton");
+          await page.waitForTimeout(1000); // Wait for reset to complete
+        }
+      } catch (error) {
+        console.error(`❌ Failed to download file ${i + 1}:`, error);
+        results.push({
+          success: false,
+          url,
+          error: error.message,
+        });
+      }
+    }
+
+    return results;
+  } catch (error) {
+    console.error("❌ Batch download process failed:", error);
     throw error;
   } finally {
     await context.close();
@@ -131,6 +314,7 @@ app.post("/api/download", async (req, res) => {
     res.json({
       success: true,
       message: "Download completed successfully",
+      generatedText: result.generatedText,
       ...result,
     });
   } catch (error) {
@@ -164,21 +348,32 @@ app.post("/api/batch-download", async (req, res) => {
 
     const batchId = generateBatchId();
 
-    // Start sequential downloads in background
+    // Start sequential downloads in background using the improved method
     (async () => {
-      for (const url of urls) {
-        try {
-          updateBatchStatus(batchId, url, { status: "downloading" });
-          const result = await downloadFile(url);
-          updateBatchStatus(batchId, url, {
-            status: "completed",
-            ...result,
+      try {
+        updateBatchStatus(batchId, "batch", { status: "downloading" });
+        const results = await downloadMultipleFiles(urls);
+
+        // Update status for each URL
+        for (let i = 0; i < urls.length; i++) {
+          const result = results[i];
+          updateBatchStatus(batchId, urls[i], {
+            status: result.success ? "completed" : "failed",
+            generatedText: result.generatedText,
+            ...(result.success ? result : { error: result.error }),
           });
-        } catch (error) {
-          updateBatchStatus(batchId, url, {
-            status: "failed",
-            error: error.message,
-          });
+        }
+      } catch (error) {
+        console.error("Batch download failed:", error);
+        // Mark all remaining URLs as failed
+        for (const url of urls) {
+          const status = downloadStatus.get(batchId)?.get(url);
+          if (!status || status.status === "downloading") {
+            updateBatchStatus(batchId, url, {
+              status: "failed",
+              error: error.message,
+            });
+          }
         }
       }
     })();
