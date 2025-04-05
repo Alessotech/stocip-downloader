@@ -31,7 +31,10 @@ function updateBatchStatus(batchId, url, status) {
 
 async function initializeBrowser() {
   if (!browser) {
-    browser = await chromium.launch({ headless: false });
+    browser = await chromium.launch({
+      headless: true,
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    });
   }
   return browser;
 }
