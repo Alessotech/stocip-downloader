@@ -510,6 +510,12 @@ app.get("/api/batch-status/:batchId", (req, res) => {
   });
 });
 
+app.get("/", (req, res) => {
+  res.json({
+    message: "Welcome to Stocip Downloader API",
+  });
+});
+
 app.get("/health", (req, res) => {
   res.json({ status: "ok" });
 });
