@@ -67,39 +67,13 @@ async function downloadFile(url) {
     await page.waitForSelector(".download-input");
     await page.fill(".download-input", url);
 
-    // Add event listener for Enter key on the input field
-    await page.evaluate(() => {
-      const input = document.querySelector(".download-input");
-      const downloadButton = document.querySelector('button[type="submit"]');
-
-      if (input && downloadButton) {
-        input.addEventListener("keypress", function (event) {
-          if (event.key === "Enter") {
-            event.preventDefault();
-            downloadButton.click();
-          }
-        });
-      }
-    });
-
     console.log("⏳ Initiating download process...");
-    let download;
-    // Try clicking the button first
-    try {
-      [download] = await Promise.all([
-        page.waitForEvent("download", { timeout: 10000 }),
-        page.click('button[type="submit"]'),
-      ]);
-      console.log("✅ Download initiated by clicking submit button");
-    } catch (error) {
-      console.log("🔄 Click method failed, trying Enter key...", error.message);
-      // Try with Enter key as fallback
-      [download] = await Promise.all([
-        page.waitForEvent("download", { timeout: 10000 }),
-        page.press(".download-input", "Enter"),
-      ]);
-      console.log("✅ Download initiated by pressing Enter key");
-    }
+    const [download] = await Promise.all([
+      page.waitForEvent("download"),
+      page.press(".download-input", "Enter"),
+    ]);
+
+    console.log("✅ Download initiated by pressing Enter key");
 
     // Wait for the input to be updated with the download link
     await page.waitForTimeout(3000);
