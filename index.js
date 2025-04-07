@@ -9,6 +9,9 @@ require("dotenv").config();
 const app = express();
 const port = process.env.PORT || 3000;
 
+// Add trust proxy setting
+app.set("trust proxy", 1);
+
 const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20 });
 app.use(cors());
 app.use(express.json());
@@ -16,6 +19,31 @@ app.use(limiter);
 
 // Add new function for batch status tracking
 let browser = null;
+let lastBrowserInitTime = null;
+
+// Function to periodically clean up browser resources
+async function cleanupBrowserResources() {
+  try {
+    if (browser && lastBrowserInitTime) {
+      const currentTime = new Date();
+      const hoursSinceInit =
+        (currentTime - lastBrowserInitTime) / (1000 * 60 * 60);
+
+      // Close and reinitialize browser after 1 hour of usage
+      if (hoursSinceInit >= 1) {
+        console.log("🧹 Performing periodic browser cleanup");
+        await browser.close();
+        browser = null;
+        lastBrowserInitTime = null;
+      }
+    }
+  } catch (error) {
+    console.error("Browser cleanup error:", error);
+  }
+}
+
+// Run cleanup every 15 minutes
+setInterval(cleanupBrowserResources, 15 * 60 * 1000);
 
 async function initializeBrowser() {
   if (!browser) {
@@ -23,6 +51,7 @@ async function initializeBrowser() {
       headless: process.env.ENVIRONMENT === "production" ? true : false,
       args: ["--no-sandbox", "--disable-setuid-sandbox"],
     });
+    lastBrowserInitTime = new Date();
   }
   return browser;
 }
@@ -63,7 +92,7 @@ async function downloadFile(url) {
     //   waitUntil: "networkidle",
     // });
 
-    await page.waitForSelector(".download-input", { timeout: 60000 }); // زيادة الوقت لـ 60 ثانية
+    await page.waitForSelector(".download-input", { timeout: 600000 }); // زيادة الوقت لـ 60 ثانية
     await page.fill(".download-input", url);
 
     console.log("⏳ Initiating download process...");
@@ -85,8 +114,10 @@ async function downloadFile(url) {
     );
     console.log("📋 Generated placeholder text:", finalPlaceholderText);
 
-    console.log("🔒 Closing browser...");
-    await browser.close();
+    // Don't close the browser here, just close the context
+    // console.log("🔒 Closing browser...");
+    // await browser.close();
+
     return {
       success: true,
       generatedText: finalPlaceholderText,
@@ -267,6 +298,14 @@ app.post("/api/get-download-url", async (req, res) => {
 
     const result = await downloadFile(url);
 
+    // Check if we have a valid generated text
+    if (!result.generatedText) {
+      return res.status(400).json({
+        success: false,
+        message: "Failed to generate download URL - no text was generated",
+      });
+    }
+
     // Return only the generated text (direct download URL)
     res.json({
       success: true,
@@ -274,11 +313,14 @@ app.post("/api/get-download-url", async (req, res) => {
     });
   } catch (error) {
     console.error("Download URL generation error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to generate download URL",
-      error: error.message,
-    });
+    // Make sure we respond even if there's an error
+    if (!res.headersSent) {
+      res.status(500).json({
+        success: false,
+        message: "Failed to generate download URL",
+        error: error.message,
+      });
+    }
   }
 });
 
