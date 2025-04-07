@@ -15,7 +15,6 @@ app.use(express.json());
 app.use(limiter);
 
 // Add new function for batch status tracking
-const downloadStatus = new Map();
 let browser = null;
 
 async function initializeBrowser() {
