@@ -58,10 +58,10 @@ async function downloadFile(url) {
 
     console.log("✅ Login successful!");
 
-    console.log("📄 Navigating to download page...");
-    await page.goto("https://stocip.com/", {
-      waitUntil: "networkidle",
-    });
+    // console.log("📄 Navigating to download page...");
+    // await page.goto("https://stocip.com/", {
+    //   waitUntil: "networkidle",
+    // });
 
     await page.waitForSelector(".download-input", { timeout: 60000 }); // زيادة الوقت لـ 60 ثانية
     await page.fill(".download-input", url);
@@ -77,6 +77,7 @@ async function downloadFile(url) {
     // Wait for the input to be updated with the download link
     await page.waitForTimeout(3000);
 
+    console.log("🔍 Waiting for download to complete...");
     // Now get the final placeholder text that contains the direct download URL
     const finalPlaceholderText = await page.$eval(
       ".download-input",
@@ -84,6 +85,8 @@ async function downloadFile(url) {
     );
     console.log("📋 Generated placeholder text:", finalPlaceholderText);
 
+    console.log("🔒 Closing browser...");
+    await browser.close();
     return {
       success: true,
       generatedText: finalPlaceholderText,
