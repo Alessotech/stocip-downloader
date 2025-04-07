@@ -64,13 +64,6 @@ async function downloadFile() {
       page.click('button[type="submit"]'),
     ]);
 
-    // Now navigate to download page
-    console.log("📄 Navigating to download page...");
-    await page.goto("https://stocip.com/product/envato-file-download/", {
-      waitUntil: "networkidle2",
-      timeout: 60000,
-    });
-
     console.log("🔍 Looking for download link...");
     await page.waitForSelector(".download-input", { timeout: 60000 });
 
@@ -91,8 +84,21 @@ async function downloadFile() {
       fs.mkdirSync(downloadsDir);
     }
 
-    // Save URL to file in downloads directory
+    // Create logs directory if it doesn't exist
+    const logsDir = path.join(__dirname, "logs");
+    if (!fs.existsSync(logsDir)) {
+      fs.mkdirSync(logsDir);
+    }
+
+    // Log the URL to a log file
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const logFileName = path.join(logsDir, `url_log_${timestamp}.txt`);
+    const logEntry = `Timestamp: ${new Date().toISOString()}\nURL: ${downloadUrl}\n`;
+
+    fs.writeFileSync(logFileName, logEntry);
+    console.log(`📝 Logged URL to ${logFileName}`);
+
+    // Save URL to file in downloads directory
     const fileName = path.join(downloadsDir, `download_url_${timestamp}.txt`);
 
     fs.writeFileSync(fileName, downloadUrl);
