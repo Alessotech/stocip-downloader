@@ -87,11 +87,6 @@ async function downloadFile(url) {
 
     console.log("✅ Login successful!");
 
-    // console.log("📄 Navigating to download page...");
-    // await page.goto("https://stocip.com/", {
-    //   waitUntil: "networkidle",
-    // });
-
     await page.waitForSelector(".download-input", { timeout: 600000 }); // زيادة الوقت لـ 60 ثانية
     await page.fill(".download-input", url);
 
@@ -114,10 +109,6 @@ async function downloadFile(url) {
     );
     console.log("📋 Generated placeholder text:", finalPlaceholderText);
 
-    // Don't close the browser here, just close the context
-    // console.log("🔒 Closing browser...");
-    // await browser.close();
-
     return {
       success: true,
       generatedText: finalPlaceholderText,
@@ -128,11 +119,6 @@ async function downloadFile(url) {
   } finally {
     await context.close();
   }
-}
-
-// Add a utility function to generate batch IDs
-function generateBatchId() {
-  return `batch_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
 
 // Function to process multiple URLs in sequence
@@ -196,39 +182,6 @@ app.post("/api/batch-download", async (req, res) => {
     });
   }
 });
-
-// Add endpoint to check batch status
-// app.get("/api/batch-status/:batchId", (req, res) => {
-//   const { batchId } = req.params;
-
-//   if (!downloadStatus.has(batchId)) {
-//     return res.status(404).json({
-//       success: false,
-//       message: "Batch ID not found",
-//     });
-//   }
-
-//   const batchMap = downloadStatus.get(batchId);
-//   const status = Object.fromEntries(batchMap);
-
-//   // Clean up completed/failed batches after 1 hour
-//   const isCompleted = Array.from(batchMap.values()).every(
-//     (s) => s.status === "completed" || s.status === "failed"
-//   );
-
-//   if (isCompleted) {
-//     setTimeout(() => {
-//       downloadStatus.delete(batchId);
-//     }, 60 * 60 * 1000);
-//   }
-
-//   res.json({
-//     success: true,
-//     batchId,
-//     isCompleted,
-//     status,
-//   });
-// });
 
 app.get("/", (req, res) => {
   res.json({
