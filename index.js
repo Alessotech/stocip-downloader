@@ -63,13 +63,17 @@ async function downloadFile(url) {
     browser = await initializeBrowser();
   }
 
-  const context = await browser.newContext({
-    acceptDownloads: true,
-    viewport: { width: 1280, height: 720 },
-  });
-  const page = await context.newPage();
+  let context = null;
+  let page = null;
+  let shouldCloseContext = true;
 
   try {
+    context = await browser.newContext({
+      acceptDownloads: true,
+      viewport: { width: 1280, height: 720 },
+    });
+    page = await context.newPage();
+
     console.log("🔑 Navigating to login page...");
     await page.goto("https://stocip.com/login", { waitUntil: "networkidle" });
     await page.waitForSelector('input[type="text"], input[type="email"]');
@@ -87,7 +91,7 @@ async function downloadFile(url) {
 
     console.log("✅ Login successful!");
 
-    await page.waitForSelector(".download-input", { timeout: 600000 }); // زيادة الوقت لـ 60 ثانية
+    await page.waitForSelector(".download-input", { timeout: 60000 });
     await page.fill(".download-input", url);
 
     console.log("⏳ Initiating download process...");
@@ -117,7 +121,9 @@ async function downloadFile(url) {
     console.error("❌ Download failed:", error);
     throw error;
   } finally {
-    await context.close();
+    if (shouldCloseContext && context) {
+      await context.close();
+    }
   }
 }
 
@@ -125,22 +131,85 @@ async function downloadFile(url) {
 async function processBatchDownload(urls) {
   const results = [];
 
-  for (const url of urls) {
-    try {
-      const result = await downloadFile(url);
-      results.push({
-        url,
-        success: true,
-        generatedText: result.generatedText,
-      });
-    } catch (error) {
-      console.error(`Error processing URL ${url}:`, error);
-      results.push({
-        url,
-        success: false,
-        error: error.message,
-      });
+  try {
+    if (!browser) {
+      browser = await initializeBrowser();
     }
+
+    const context = await browser.newContext({
+      acceptDownloads: true,
+      viewport: { width: 1280, height: 720 },
+    });
+
+    const page = await context.newPage();
+
+    console.log("🔑 Navigating to login page...");
+    await page.goto("https://stocip.com/login", { waitUntil: "networkidle" });
+    await page.waitForSelector('input[type="text"], input[type="email"]');
+    await page.fill(
+      'input[type="text"], input[type="email"]',
+      process.env.STOCIP_EMAIL
+    );
+    await page.fill('input[type="password"]', process.env.STOCIP_PASSWORD);
+
+    console.log("🔓 Attempting to log in...");
+    await Promise.all([
+      page.waitForNavigation({ waitUntil: "networkidle" }),
+      page.click('button[type="submit"]'),
+    ]);
+
+    console.log("✅ Login successful!");
+
+    // Process each URL
+    for (const url of urls) {
+      try {
+        await page.waitForSelector(".download-input", { timeout: 60000 });
+        await page.fill(".download-input", url);
+
+        console.log("⏳ Initiating download process for URL:", url);
+        const [download] = await Promise.all([
+          page.waitForEvent("download"),
+          page.press(".download-input", "Enter"),
+        ]);
+
+        console.log("✅ Download initiated by pressing Enter key");
+
+        // Wait for the input to be updated with the download link
+        await page.waitForTimeout(3000);
+
+        console.log("🔍 Waiting for download to complete...");
+        // Now get the final placeholder text that contains the direct download URL
+        const finalPlaceholderText = await page.$eval(
+          ".download-input",
+          (el) => el.value || el.getAttribute("placeholder") || ""
+        );
+        console.log("📋 Generated placeholder text:", finalPlaceholderText);
+
+        results.push({
+          url,
+          success: true,
+          generatedText: finalPlaceholderText,
+        });
+
+        // Click the reset button before processing the next URL
+        if (urls.indexOf(url) < urls.length - 1) {
+          console.log("🔄 Clicking reset button for next URL");
+          await page.click("#resetButton");
+          await page.waitForTimeout(1000); // Wait for reset to complete
+        }
+      } catch (error) {
+        console.error(`Error processing URL ${url}:`, error);
+        results.push({
+          url,
+          success: false,
+          error: error.message,
+        });
+      }
+    }
+
+    await context.close();
+  } catch (error) {
+    console.error("Batch processing error:", error);
   }
 
   return results;
@@ -236,7 +305,6 @@ app.post("/api/get-download-url", async (req, res) => {
 app.listen(port, () => {
   console.log(`🚀 Server is running on port ${port}`);
 });
-
 // Add cleanup on server shutdown
 process.on("SIGINT", async () => {
   if (browser) {
