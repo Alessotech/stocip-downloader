@@ -1,12 +1,15 @@
 # Stocip Downloader
 
-A Node.js automation tool that uses Puppeteer to download files from Stocip.com. This tool automates the login process and retrieves download URLs from the platform.
+A Node.js automation tool that uses Playwright to download files from Stocip.com. This tool provides a REST API for automated file downloads and batch processing.
 
 ## Features
 
-- Automated browser control using Puppeteer
+- RESTful API endpoints for file downloads
+- Batch download support (up to 10 files per batch)
+- Real-time download status tracking
+- Automated browser control using Playwright
 - Secure login handling
-- Automatic download URL extraction
+- Rate limiting and CORS support
 - Organized file storage in a dedicated downloads folder
 - Error handling and logging
 
@@ -14,6 +17,7 @@ A Node.js automation tool that uses Puppeteer to download files from Stocip.com.
 
 - Node.js (v14 or higher)
 - npm (Node Package Manager)
+- Stocip.com account credentials
 
 ## Installation
 
@@ -28,50 +32,92 @@ cd stocip-downloader
 npm install
 ```
 
+3. Create a `.env` file in the root directory with the following variables:
+```env
+STOCIP_EMAIL=your_email@example.com
+STOCIP_PASSWORD=your_password
+DOWNLOAD_PATH=path/to/downloads/folder
+PORT=3000
+```
+
+## API Endpoints
+
+### Single File Download
+- **POST** `/api/download`
+- Request body: `{ "url": "https://example.com/file" }`
+- Returns download status and file information
+
+### Batch Download
+- **POST** `/api/batch-download`
+- Request body: `{ "urls": ["https://example.com/file1", "https://example.com/file2"] }`
+- Returns batch ID and total files count
+
+### Batch Status Check
+- **GET** `/api/batch-status/:batchId`
+- Returns detailed status of all files in the batch
+
+### Health Check
+- **GET** `/health`
+- Returns server status
+
 ## Usage
 
-1. Run the script:
+1. Start the server:
 ```bash
 node index.js
 ```
 
-The script will:
-- Launch a browser in private mode
-- Navigate to the Stocip login page
-- Handle the login process
-- Navigate to the download page
-- Extract the download URL
-- Save the URL to a timestamped file in the `downloads` folder
+2. The server will start on port 3000 (or the port specified in your .env file)
+
+3. Use the API endpoints to download files:
+```bash
+# Single file download
+curl -X POST http://localhost:3000/api/download \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://example.com/file"}'
+
+# Batch download
+curl -X POST http://localhost:3000/api/batch-download \
+  -H "Content-Type: application/json" \
+  -d '{"urls": ["https://example.com/file1", "https://example.com/file2"]}'
+```
 
 ## Project Structure
 
 ```
 stocip-downloader/
-├── downloads/          # Directory where download URLs are saved
-├── index.js           # Main script file
+├── downloads/          # Directory where files are downloaded
+├── index.js           # Main server file
 ├── package.json       # Project dependencies and configuration
+├── .env              # Environment variables (create this file)
 └── README.md         # This file
 ```
 
 ## Dependencies
 
-- `puppeteer`: ^24.4.0
-- `puppeteer-core`: ^24.4.0
-- `express`: ^4.21.2
+- `playwright`: ^1.41.0
+- `express`: ^4.18.2
 - `cors`: ^2.8.5
+- `express-rate-limit`: ^7.1.5
+- `dotenv`: ^16.4.1
 
 ## Error Handling
 
-The script includes comprehensive error handling for:
-- Browser launch failures
-- Login issues
-- Navigation timeouts
-- Missing download URLs
+The API includes comprehensive error handling for:
+- Invalid URLs
+- Authentication failures
+- Download timeouts
 - File system operations
+- Rate limiting
+- Batch processing errors
 
-## Security Note
+## Security Features
 
-⚠️ Please ensure you keep your login credentials secure and never commit them to version control.
+- Rate limiting (5 requests per 15 minutes)
+- CORS support
+- Environment variable configuration
+- Secure credential handling
+- Input validation
 
 ## License
 
