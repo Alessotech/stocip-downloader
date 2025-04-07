@@ -63,7 +63,7 @@ async function downloadFile(url) {
       waitUntil: "networkidle",
     });
 
-    await page.waitForSelector(".download-input");
+    await page.waitForSelector(".download-input", { timeout: 60000 }); // زيادة الوقت لـ 60 ثانية
     await page.fill(".download-input", url);
 
     console.log("⏳ Initiating download process...");
