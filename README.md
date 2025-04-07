@@ -50,11 +50,13 @@ PORT=3000
 ### Batch Download
 - **POST** `/api/batch-download`
 - Request body: `{ "urls": ["https://example.com/file1", "https://example.com/file2"] }`
-- Returns batch ID and total files count
+- Returns results array with generated text for each URL
+- Limited to 10 URLs per batch
 
-### Batch Status Check
-- **GET** `/api/batch-status/:batchId`
-- Returns detailed status of all files in the batch
+### Get Download URL
+- **POST** `/api/get-download-url`
+- Request body: `{ "url": "https://example.com/file" }`
+- Returns the generated download text
 
 ### Health Check
 - **GET** `/health`
@@ -71,12 +73,12 @@ node index.js
 
 3. Use the API endpoints to download files:
 ```bash
-# Single file download
-curl -X POST http://localhost:3000/api/download \
+# Single file download (get direct URL)
+curl -X POST http://localhost:3000/api/get-download-url \
   -H "Content-Type: application/json" \
   -d '{"url": "https://example.com/file"}'
 
-# Batch download
+# Batch download (multiple URLs)
 curl -X POST http://localhost:3000/api/batch-download \
   -H "Content-Type: application/json" \
   -d '{"urls": ["https://example.com/file1", "https://example.com/file2"]}'

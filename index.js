@@ -130,116 +130,72 @@ async function downloadFile(url) {
   }
 }
 
-// New function to download multiple files using the same session
-// async function downloadMultipleFiles(urls) {
-//   console.log("🔗 Starting batch download process for", urls.length, "files");
+// Add a utility function to generate batch IDs
+function generateBatchId() {
+  return `batch_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+}
 
-//   if (!browser) {
-//     browser = await initializeBrowser();
-//   }
+// Function to process multiple URLs in sequence
+async function processBatchDownload(urls) {
+  const results = [];
 
-//   const context = await browser.newContext({
-//     acceptDownloads: true,
-//     viewport: { width: 1280, height: 720 },
-//   });
-//   const page = await context.newPage();
+  for (const url of urls) {
+    try {
+      const result = await downloadFile(url);
+      results.push({
+        url,
+        success: true,
+        generatedText: result.generatedText,
+      });
+    } catch (error) {
+      console.error(`Error processing URL ${url}:`, error);
+      results.push({
+        url,
+        success: false,
+        error: error.message,
+      });
+    }
+  }
 
-//   try {
-//     // Login only once
-//     console.log("🔑 Navigating to login page...");
-//     await page.goto("https://stocip.com/login", { waitUntil: "networkidle" });
-//     await page.waitForSelector('input[type="text"], input[type="email"]');
-//     await page.fill(
-//       'input[type="text"], input[type="email"]',
-//       process.env.STOCIP_EMAIL
-//     );
-//     await page.fill('input[type="password"]', process.env.STOCIP_PASSWORD);
-
-//     console.log("🔓 Attempting to log in...");
-//     await Promise.all([
-//       page.waitForNavigation({ waitUntil: "networkidle" }),
-//       page.click('button[type="submit"]'),
-//     ]);
-
-//     // Now navigate to download page
-//     console.log("📄 Navigating to download page...");
-//     await page.goto("https://stocip.com/product/envato-file-download/", {
-//       waitUntil: "networkidle2",
-//       timeout: 60000,
-//     });
-
-//     console.log("🔍 Looking for download link...");
-//     await page.waitForSelector(".download-input", { timeout: 60000 });
-
-//     const downloadUrl = await page.evaluate(() => {
-//       const inputElement = document.querySelector(".download-input");
-//       return inputElement ? inputElement.getAttribute("placeholder") : null;
-//     });
-
-//     if (!downloadUrl) {
-//       throw new Error("❌ Could not find download URL on the page");
-//     }
-
-//     console.log("📥 Found download URL:", downloadUrl);
-
-//     // Create downloads directory if it doesn't exist
-//     const downloadsDir = path.join(__dirname, "downloads");
-//     if (!fs.existsSync(downloadsDir)) {
-//       fs.mkdirSync(downloadsDir);
-//     }
-
-//     // Save URL to file in downloads directory
-//     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-//     const fileName = path.join(downloadsDir, `download_url_${timestamp}.txt`);
-
-//     fs.writeFileSync(fileName, downloadUrl);
-//     console.log(`💾 Saved download URL to ${fileName}`);
-
-//     // Close the browser after saving
-//     console.log("🔒 Closing browser...");
-//     await browser.close();
-
-//     console.log("✅ Done! Check the downloads folder for your URL.");
-//   } catch (error) {
-//     console.error("Batch API Error:", error);
-//     return {
-//       success: false,
-//       message: "Failed to start batch download",
-//       error: error.message,
-//     };
-//   } finally {
-//     await context.close();
-//   }
-// }
+  return results;
+}
 
 // Batch download endpoint
-// app.post("/api/batch-download", async (req, res) => {
-//   try {
-//     const { urls } = req.body;
-//     if (!urls || !Array.isArray(urls) || urls.length === 0) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Please provide an array of URLs",
-//       });
-//     }
+app.post("/api/batch-download", async (req, res) => {
+  try {
+    const { urls } = req.body;
 
-//     const batchId = generateBatchId();
-//     const result = await downloadMultipleFiles(urls);
+    if (!urls || !Array.isArray(urls) || urls.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide an array of URLs",
+      });
+    }
 
-//     res.json({
-//       success: true,
-//       batchId,
-//       message: "Batch download started",
-//     });
-//   } catch (error) {
-//     console.error("Batch API Error:", error);
-//     res.status(500).json({
-//       success: false,
-//       message: "Failed to start batch download",
-//       error: error.message,
-//     });
-//   }
-// });
+    if (urls.length > 10) {
+      return res.status(400).json({
+        success: false,
+        message: "Maximum 10 URLs allowed per batch",
+      });
+    }
+
+    console.log(`🔄 Starting batch download process for ${urls.length} URLs`);
+    const results = await processBatchDownload(urls);
+
+    res.json({
+      success: true,
+      message: "Batch download completed",
+      results,
+    });
+  } catch (error) {
+    console.error("Batch download error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to process batch download",
+      error: error.message,
+    });
+  }
+});
 
 // Add endpoint to check batch status
 // app.get("/api/batch-status/:batchId", (req, res) => {
