@@ -1,33 +1,23 @@
-# استخدم صورة رسمية من Node.js مع دعم Alpine لتقليل الحجم
-FROM node:20-alpine
+# استخدم صورة رسمية من Microsoft Playwright تحتوي على المتصفحات مثبتة
+FROM mcr.microsoft.com/playwright:v1.51.1-focal
 
-# تثبيت التبعيات اللازمة لـ Puppeteer
-RUN apk add --no-cache \
-    chromium \
-    nss \
-    freetype \
-    freetype-dev \
-    harfbuzz \
-    ca-certificates \
-    ttf-freefont
-
-# تعيين متغير البيئة لـ Puppeteer
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
-
-# إنشاء مجلد العمل داخل الحاوية
+# إعداد مجلد العمل داخل الحاوية
 WORKDIR /app
 
-# نسخ ملفات التعريف والتبعيات
+# نسخ ملفات التعريف الخاصة بالمشروع
 COPY package*.json ./
 
-# تثبيت التبعيات
+# تثبيت التبعيات من npm
 RUN npm install
+
+# تحميل المتصفحات الخاصة بـ Playwright (Chromium, Firefox, WebKit)
+RUN npx playwright install --with-deps
 
 # نسخ باقي ملفات المشروع
 COPY . .
 
-# تعيين المنفذ الذي يستمع له التطبيق
+# فتح المنفذ 3000 لأن التطبيق يستخدمه
 EXPOSE 3000
 
-# الأمر الافتراضي لتشغيل التطبيق
+# الأمر الذي يشغل التطبيق عند بدء الحاوية
 CMD ["npm", "start"]
