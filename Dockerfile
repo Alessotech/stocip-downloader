@@ -1,23 +1,21 @@
-# استخدم صورة رسمية من Microsoft Playwright تحتوي على المتصفحات مثبتة
-FROM mcr.microsoft.com/playwright:v1.51.1-focal
+# استخدم نسخة رسمية موجودة من Microsoft Playwright
+FROM mcr.microsoft.com/playwright:v1.42.1-focal
 
-# إعداد مجلد العمل داخل الحاوية
+# تعيين مجلد العمل
 WORKDIR /app
 
-# نسخ ملفات التعريف الخاصة بالمشروع
+# نسخ ملفات package وتثبيت التبعيات
 COPY package*.json ./
-
-# تثبيت التبعيات من npm
 RUN npm install
 
-# تحميل المتصفحات الخاصة بـ Playwright (Chromium, Firefox, WebKit)
+# تحميل المتصفحات
 RUN npx playwright install --with-deps
 
 # نسخ باقي ملفات المشروع
 COPY . .
 
-# فتح المنفذ 3000 لأن التطبيق يستخدمه
+# تعيين المنفذ
 EXPOSE 3000
 
-# الأمر الذي يشغل التطبيق عند بدء الحاوية
+# تشغيل التطبيق
 CMD ["npm", "start"]
